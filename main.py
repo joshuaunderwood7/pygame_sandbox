@@ -31,7 +31,7 @@ bullet_sprite = (412,848, 16, 16)
 number_size        = (90, 151)
 number_colorkey    = (255, 255, 255)
 number_spritesheet = pygame.image.load(r"art\Number collection.png").convert()
-number_spriteList  = [ ( 130, 972, 90, 151) 
+number_spriteList  = [ ( 130, 972, 90, 151)
                      , ( 250, 972, 90, 151)
                      , ( 369, 972, 90, 151)
                      , ( 488, 972, 90, 151)
@@ -64,21 +64,21 @@ class Actor(pygame.sprite.Sprite):
         super().__init__()
         self.image = pygame.Surface(sprite_size)
         self.image.set_colorkey(colorkey)
-        
+
         self.image.blit(spritesheet, (0,0), random.choice(block_spriteList))
-        
+
         self.rect = self.image.get_rect()
         self.rect.x = posX
         self.rect.y = posY
         self.vel = pygame.math.Vector2(vel)
         self.acc = pygame.math.Vector2(acc)
-        
-    
+
+
 class FallingBlock(Actor):
     def __init__(self, posX, posY):
         super().__init__(posX, posY)
         self.acc[1] = G
-        
+
     def update(self):
         time = clock.get_time()
         self.vel    += self.acc    * time
@@ -89,49 +89,51 @@ class FallingBlock(Actor):
             self.rect.x = random.randrange(0, width)
             self.vel = pygame.math.Vector2((0.0, 0.0))
             self.image.blit(spritesheet, (0,0), random.choice(block_spriteList))
-           
+
+
 class Player(Actor):
     def __init__(self):
         super().__init__(width/2, 240)
         self.image.blit(spritesheet, (0,0), player_sprite)
-    
+
     def update(self):
         self.rect.x , _ = pygame.mouse.get_pos()
-    
-    
+
 
 class Bullet(Actor):
     def __init__(self):
         super().__init__(pygame.mouse.get_pos()[0], 240)
         self.image.blit(spritesheet, (0,0), bullet_sprite)
+
+    def fire(self):
         self.rect.x, _ = pygame.mouse.get_pos()
-    
+        self.rect.y    = 240
+
     def update(self):
         time = clock.get_time()
-        self.rect.y -= time
+        self.rect.y -= 5
 
 
-class Number(pygame.sprite.Sprite): 
+class Number(pygame.sprite.Sprite):
     def __init__(self, value=0):
         super().__init__()
         self.value = value
         self.update_image(value)
-    
+
     def update_image(self, value):
         stringSize = len(str(value))
         self.image = pygame.Surface((stringSize + number_size[0] * stringSize, number_size[1]))
         self.image.set_colorkey(number_colorkey)
         self.image.fill(number_colorkey)
-        
+
         for ii, digit in enumerate(str(value)):
             loc = (1 + number_size[0] * ii , 0)
             self.image.blit(number_spritesheet, loc, number_spriteList[int(digit)])
-        
-        
+
         self.image = pygame.transform.scale(self.image, screen.get_size())
         self.rect = self.image.get_rect()
-            
-    
+
+
 ### Game Function ###
 def runGame():
 
@@ -139,6 +141,7 @@ def runGame():
     block_list       = pygame.sprite.Group()
     all_sprites_list = pygame.sprite.Group()
     bullet_list      = pygame.sprite.Group()
+    dead_bullets     = pygame.sprite.Group()
 
     ### Actor Creation ###
     player = Player()
@@ -146,7 +149,7 @@ def runGame():
     for _ in range(50):
         block = FallingBlock(random.randrange(width), 0-random.randrange(height))
         block_list.add(block)
-        
+
     ### Environment Creation ###
     bullet_stop = FallingBlock(0,-20)
     bullet_stop.rect.width = width
@@ -155,14 +158,14 @@ def runGame():
     all_sprites_list.add(dispScore)
     for block in block_list : all_sprites_list.add(block)
     all_sprites_list.add(player)
-    
-    
+
+
     ### Initilize Game Elements ###
     score = 0
     dispScore.update_image(score)
     done = False
     #pygame.mixer.music.play(-1)
-        
+
 
     ### Game Loop ###
     while not done:
@@ -174,40 +177,50 @@ def runGame():
                 if event.__dict__['unicode'] == 'q':
                     done = True
             if event.type == pygame.MOUSEBUTTONDOWN:
-                #shoot_sound.play()
-                newBullet = Bullet()
+                shoot_sound.play()
+                if not dead_bullets.sprites():
+                    newBullet = Bullet()
+                else:
+                    newBullet = dead_bullets.sprites()[0]
+                    dead_bullets.remove(newBullet)
+                newBullet.fire()
                 all_sprites_list.add(newBullet)
                 bullet_list.add(newBullet)
 
         #=== Game Logic ===#
-        pygame.sprite.spritecollide(bullet_stop, bullet_list, True)
+        for dead_bullet in pygame.sprite.spritecollide(bullet_stop, bullet_list, True):
+            dead_bullets.add(dead_bullet)
+
         for bullet in bullet_list:
             blocks_hit_list = pygame.sprite.spritecollide(bullet, block_list, True)
             if blocks_hit_list:
                 bullet_list.remove(bullet)
                 all_sprites_list.remove(bullet)
+                dead_bullets.add(bullet)
             for block in blocks_hit_list:
                 score += 1
                 dispScore.update_image(score)
         #==================#
-        
+
         ### Update Screen ###
         screen.fill(red)
         all_sprites_list.update()
         all_sprites_list.draw(screen)
 
-        
+
         ### Bullshit style testing ###
-        text = font.render(str(clock.get_time()), True, yellow)
+        active = len(bullet_list)
+        dead   = len(dead_bullets)
+        text = font.render(f"{active} : {dead}", True, yellow)
         text = pygame.transform.scale(text, screen.get_size())
 
         screen.blit(text, (0,0))
         pygame.transform.scale(screen, resolution, display)
 
         ### Manage Refresh Rate ###
-        clock.tick(18)
+        clock.tick(32)
         pygame.display.flip()
-        
+
     ### Clean up when done playing ###
     pygame.quit()
 
